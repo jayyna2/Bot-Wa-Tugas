@@ -37,9 +37,10 @@ try:
     from neonize.events import ConnectedEv, MessageEv, PairStatusEv
     from neonize.utils import log
     import logging
-except ImportError:
+except ImportError as err:
     print("=" * 55)
-    print("  ❌ ERROR: Library 'neonize' belum terinstall!")
+    print(f"  ❌ ERROR: Library 'neonize' gagal di-import!")
+    print(f"  Detail Error: {err}")
     print("=" * 55)
     print()
     print("  Jalankan perintah berikut untuk install:")
