@@ -17,11 +17,6 @@
 """
 
 # =========================================================
-# FIX ENCODING WINDOWS
-# =========================================================
-# Terminal Windows menggunakan encoding cp1252 secara default,
-# yang tidak mendukung karakter emoji (Unicode). Kode di bawah
-# memaksa stdout/stderr menggunakan UTF-8 agar emoji tampil benar.
 import sys
 import os
 
@@ -30,6 +25,25 @@ if sys.platform == "win32":
     os.system("")  # Enable ANSI/VT100 escape sequences
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+def load_env():
+    """Membaca file .env jika ada dan memasukkannya ke os.environ secara manual."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        key, val = parts[0].strip(), parts[1].strip()
+                        if val.startswith('"') and val.endswith('"'):
+                            val = val[1:-1]
+                        elif val.startswith("'") and val.endswith("'"):
+                            val = val[1:-1]
+                        os.environ[key] = val
+
+load_env()
 
 from database import init_db, tambah_tugas, get_tugas_belum_selesai, selesaikan_tugas, get_semua_tugas
 
