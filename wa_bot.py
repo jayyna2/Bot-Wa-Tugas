@@ -86,6 +86,10 @@ client = NewClient(SESSION_DB)
 import time
 BOT_START_TIME = int(time.time())
 
+# Status keaktifan bot (True: aktif merespon, False: nonaktif/paused)
+BOT_ACTIVE = True
+
+
 
 # =========================================================
 # EVENT HANDLERS
@@ -178,20 +182,51 @@ def on_message(client: NewClient, message: MessageEv):
             return
 
         user_id = str(sender_jid)
+        msg_clean = msg_text.strip().lower()
 
-        # --- PERINTAH KHUSUS KELUAR/MATIKAN BOT ---
-        if msg_text.strip().lower() == "!keluar":
-            try:
-                client.reply_message("👋 Bot dihentikan. Mematikan proses...", message)
-            except Exception as e:
-                print(f"❌ GAGAL kirim reply_message untuk keluar: {e}", flush=True)
+        # --- HANDLER STATUS AKTIF/NONAKTIF ---
+        global BOT_ACTIVE
+        if msg_clean == "!start":
+            if not BOT_ACTIVE:
+                BOT_ACTIVE = True
                 try:
-                    client.send_message(chat_jid, "👋 Bot dihentikan. Mematikan proses...")
+                    client.reply_message("⚡ *Bot berhasil diaktifkan!* Sekarang saya siap menerima perintah lagi. Kirim `!help` untuk panduan.", message)
+                except Exception as e:
+                    print(f"❌ GAGAL kirim reply_message untuk start: {e}", flush=True)
+                    try:
+                        client.send_message(chat_jid, "⚡ *Bot berhasil diaktifkan!* Sekarang saya siap menerima perintah lagi.")
+                    except Exception:
+                        pass
+                print(f"⚡ Bot diaktifkan kembali oleh {user_id}.", flush=True)
+            else:
+                try:
+                    client.reply_message("ℹ️ *Bot sudah dalam keadaan aktif.*", message)
                 except Exception:
                     pass
-            print(f"🛑 Menerima perintah !keluar dari {user_id}. Mematikan bot...", flush=True)
-            import os
-            os._exit(0)
+            return
+
+        if msg_clean in ("!stop", "!keluar"):
+            if BOT_ACTIVE:
+                BOT_ACTIVE = False
+                try:
+                    client.reply_message("💤 *Bot dinonaktifkan.* Semua perintah dinonaktifkan sampai Anda mengirim `!start` kembali.", message)
+                except Exception as e:
+                    print(f"❌ GAGAL kirim reply_message untuk stop/keluar: {e}", flush=True)
+                    try:
+                        client.send_message(chat_jid, "💤 *Bot dinonaktifkan.* Semua perintah dinonaktifkan sampai Anda mengirim `!start` kembali.")
+                    except Exception:
+                        pass
+                print(f"💤 Bot dinonaktifkan oleh {user_id}.", flush=True)
+            else:
+                try:
+                    client.reply_message("ℹ️ *Bot memang sedang tidak aktif.* Kirim `!start` untuk mengaktifkan.", message)
+                except Exception:
+                    pass
+            return
+
+        # Jika bot sedang dinonaktifkan, abaikan semua pesan masuk lainnya
+        if not BOT_ACTIVE:
+            return
 
         # Cek apakah pesan dari diri sendiri
         # Izinkan jika: (1) perintah !, ATAU (2) user sedang di sesi !tambah
@@ -212,7 +247,7 @@ def on_message(client: NewClient, message: MessageEv):
         print(f"📨 {label} {sender_name} > {msg_text}", flush=True)
 
         # --- PROSES PESAN DAN KIRIM BALASAN ---
-        balasan = proses_pesan(msg_text, user_id=user_id)
+        balasan = proses_pesan(msg_text, user_id=user_id, is_whatsapp=True)
 
         if balasan:
             try:

@@ -347,12 +347,22 @@ def handle_semua() -> str:
     return f"📋 *Semua Tugas (Riwayat Lengkap):*\n\n```\n{tabel}\n```"
 
 
-def handle_help() -> str:
+def handle_help(is_whatsapp: bool = False) -> str:
     """
     Menangani perintah: !help
 
     Menampilkan panduan lengkap penggunaan bot.
     """
+    status_help = (
+        "7️⃣ *Nonaktifkan Respon Bot*\n"
+        "   `!stop` atau `!keluar`\n"
+        "   Menonaktifkan respon bot (kirim `!start` untuk mengaktifkan kembali)."
+    ) if is_whatsapp else (
+        "7️⃣ *Keluar dari Program*\n"
+        "   `!keluar`\n"
+        "   Menghentikan jalannya simulasi terminal."
+    )
+
     return (
         "🤖 *Panduan Bot Pengingat Tugas Kuliah*\n\n"
         "Berikut daftar perintah yang tersedia:\n\n"
@@ -374,9 +384,7 @@ def handle_help() -> str:
         "6️⃣ *Bantuan*\n"
         "   `!help`\n"
         "   Menampilkan pesan bantuan ini.\n\n"
-        "7️⃣ *Matikan Bot (Keluar)*\n"
-        "   `!keluar`\n"
-        "   Menghentikan proses/mematikan jalannya bot."
+        + status_help
     )
 
 
@@ -387,7 +395,7 @@ def handle_help() -> str:
 # mentah + user_id, lalu menentukan apakah user sedang
 # dalam sesi interaktif atau mengirim perintah baru.
 
-def proses_pesan(pesan: str, user_id: str = "terminal") -> str:
+def proses_pesan(pesan: str, user_id: str = "terminal", is_whatsapp: bool = False) -> str:
     """
     Menerima pesan chat mentah dan mengembalikan balasan bot.
 
@@ -451,7 +459,7 @@ def proses_pesan(pesan: str, user_id: str = "terminal") -> str:
         return handle_semua()
 
     elif pesan_lower == "!help":
-        return handle_help()
+        return handle_help(is_whatsapp)
 
     else:
         # Perintah tidak dikenali
