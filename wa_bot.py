@@ -179,6 +179,20 @@ def on_message(client: NewClient, message: MessageEv):
 
         user_id = str(sender_jid)
 
+        # --- PERINTAH KHUSUS KELUAR/MATIKAN BOT ---
+        if msg_text.strip().lower() == "!keluar":
+            try:
+                client.reply_message("👋 Bot dihentikan. Mematikan proses...", message)
+            except Exception as e:
+                print(f"❌ GAGAL kirim reply_message untuk keluar: {e}", flush=True)
+                try:
+                    client.send_message(chat_jid, "👋 Bot dihentikan. Mematikan proses...")
+                except Exception:
+                    pass
+            print(f"🛑 Menerima perintah !keluar dari {user_id}. Mematikan bot...", flush=True)
+            import os
+            os._exit(0)
+
         # Cek apakah pesan dari diri sendiri
         # Izinkan jika: (1) perintah !, ATAU (2) user sedang di sesi !tambah
         # Block sisanya agar balasan bot tidak trigger loop
