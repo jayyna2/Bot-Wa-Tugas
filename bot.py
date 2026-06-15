@@ -366,21 +366,106 @@ def handle_help() -> str:
     )
 
 
-def handle_bayar() -> str:
-    """
-    Menangani perintah: !bayar atau !dana
+def crc16_ccitt(data: str) -> str:
+    """Menghitung CRC-16/CCITT-FALSE untuk standar QRIS (EMVCo)."""
+    crc = 0xFFFF
+    for byte in data.encode('ascii'):
+        crc ^= (byte << 8)
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc = crc << 1
+            crc &= 0xFFFF
+    return f"{crc:04X}"
 
-    Mengembalikan prefix [IMAGE] dengan URL QR Code DANA dan detail informasi pembayaran.
+
+def make_qris_dynamic(static_qris: str, amount: int) -> str:
+    """Mengubah string QRIS statis menjadi dinamis dengan nominal tertentu."""
+    import re
+    qris = static_qris.strip()
+    
+    # Hapus CRC lama di akhir jika ada (6304 + 4 karakter hex CRC)
+    if not qris.endswith("6304"):
+        idx_63 = qris.rfind("6304")
+        if idx_63 != -1:
+            qris = qris[:idx_63 + 4]
+            
+    # Format tag 54 (Amount): "54" + 2 digit panjang nominal + nominal
+    amount_str = str(amount)
+    tag_54 = f"54{len(amount_str):02d}{amount_str}"
+    
+    # Cari tag 58 (Country Code "5802ID") untuk menyisipkan tag 54 sebelumnya
+    idx_58 = qris.find("5802ID")
+    if idx_58 != -1:
+        before_58 = qris[:idx_58]
+        # Cari jika tag 54 sudah ada sebelumnya untuk di-replace
+        match = re.search(r"54(\d{2})(\d+)", before_58)
+        if match:
+            length = int(match.group(1))
+            val = match.group(2)
+            if len(val) >= length:
+                val = val[:length]
+                old_tag = f"54{length:02d}{val}"
+                qris = qris.replace(old_tag, tag_54)
+        else:
+            # Jika belum ada, sisipkan sebelum tag 58
+            qris = qris[:idx_58] + tag_54 + qris[idx_58:]
+            
+    # Hitung CRC16 baru
+    crc = crc16_ccitt(qris)
+    return qris + crc
+
+
+def handle_bayar(pesan: str) -> str:
     """
+    Menangani perintah: !bayar [nominal] atau !dana [nominal]
+
+    Mengembalikan QR Code DANA/QRIS beserta caption nominal pembayaran.
+    """
+    import re
+    
+    # Ambil bagian nominal dari pesan (misal "!bayar 10000" -> 10000)
+    parts = pesan.strip().split()
+    nominal = None
+    if len(parts) > 1:
+        # Hapus semua karakter non-angka seperti Rp, titik, koma
+        num_str = re.sub(r"\D", "", parts[1])
+        if num_str.isdigit():
+            nominal = int(num_str)
+            
+    # Format nominal ke mata uang Rupiah untuk tampilan caption
+    nominal_text = f"Rp {nominal:,.0f}".replace(",", ".") if nominal else "Sukarela"
+    
+    # Cek jika ada konfigurasi QRIS statis dari Environment Variable
+    static_qris = os.environ.get("STATIC_QRIS")
+    
+    if static_qris and nominal:
+        try:
+            dynamic_qris_str = make_qris_dynamic(static_qris, nominal)
+            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={dynamic_qris_str}"
+            caption = (
+                f"💸 *METODE PEMBAYARAN QRIS* 💸\n\n"
+                f"Silakan scan QRIS di atas untuk membayar otomatis:\n"
+                f"💰 *Nominal:* *{nominal_text}*\n\n"
+                f"Bisa di-scan menggunakan DANA, OVO, GoPay, ShopeePay, LinkAja, atau Mobile Banking apa saja! 🙏"
+            )
+            return f"[IMAGE]{qr_url}|{caption}"
+        except Exception as err_qris:
+            # Fallback ke DANA jika gagal generate QRIS
+            print(f"⚠️ Gagal generate QRIS dinamis: {err_qris}", flush=True)
+
+    # Default fallback: Link DANA
     qr_data = "https://link.dana.id/qr/085841532954"
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={qr_data}"
     
     caption = (
-        "💸 *METODE PEMBAYARAN DANA* 💸\n\n"
-        "Silakan scan QR Code DANA di atas melalui aplikasi e-wallet kamu, atau klik link di bawah ini:\n"
-        "🔗 https://link.dana.id/qr/085841532954\n\n"
-        "📞 *No. HP DANA:* `085841532954`\n\n"
-        "Setelah melakukan transfer, silakan konfirmasi ke admin. Terima kasih! 🙏"
+        f"💸 *METODE PEMBAYARAN DANA* 💸\n\n"
+        f"Silakan scan QR Code DANA di atas atau klik link berikut untuk membayar:\n"
+        f"🔗 https://link.dana.id/qr/085841532954\n\n"
+        f"📞 *No. HP DANA:* `085841532954`\n"
+        f"💰 *Nominal:* *{nominal_text}*\n\n"
+        f"Setelah melakukan transfer, silakan konfirmasi ke admin. Terima kasih! 🙏"
     )
     return f"[IMAGE]{qr_url}|{caption}"
 
@@ -458,8 +543,8 @@ def proses_pesan(pesan: str, user_id: str = "terminal") -> str:
     elif pesan_lower == "!help":
         return handle_help()
 
-    elif pesan_lower == "!bayar" or pesan_lower == "!dana" or pesan_lower == "!qr":
-        return handle_bayar()
+    elif pesan_lower.startswith("!bayar") or pesan_lower.startswith("!dana") or pesan_lower.startswith("!qr"):
+        return handle_bayar(pesan)
 
     else:
         # Perintah tidak dikenali
