@@ -520,7 +520,7 @@ def handle_bayar(pesan: str) -> str:
             )
             return f"[IMAGE]{qr_url}|{caption}"
         except Exception as e:
-            print(f"⚠️ Gagal membuat transaksi Midtrans: {e}", flush=True)
+            return f"❌ *Gagal membuat Invoice Midtrans:*\n`{e}`\n\nSilakan periksa kembali apakah Server Key kamu sudah benar dan sesuai (Sandbox / Production)."
 
     # --- PILIHAN 2: Link Pembayaran Kustom (Saweria / Sociabuzz / Trakteer) ---
     custom_link = os.environ.get("PAYMENT_LINK")
