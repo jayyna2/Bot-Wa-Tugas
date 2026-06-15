@@ -417,13 +417,65 @@ def make_qris_dynamic(static_qris: str, amount: int) -> str:
     return qris + crc
 
 
+def create_midtrans_payment(amount: int) -> tuple[str, str]:
+    """
+    Membuat transaksi di Midtrans Snap dan mengembalikan (redirect_url, order_id).
+    """
+    import requests
+    import base64
+    import time
+    import random
+    
+    server_key = os.environ.get("MIDTRANS_SERVER_KEY", "").strip()
+    is_prod = os.environ.get("MIDTRANS_IS_PRODUCTION", "false").strip().lower() == "true"
+    
+    if not server_key:
+        raise ValueError("MIDTRANS_SERVER_KEY tidak dikonfigurasi.")
+        
+    url = (
+        "https://app.midtrans.com/snap/v1/transactions"
+        if is_prod
+        else "https://app.sandbox.midtrans.com/snap/v1/transactions"
+    )
+    
+    # Encode Server Key ke Base64 (ditambah ':' sesuai spec Midtrans)
+    auth_str = f"{server_key}:"
+    auth_base64 = base64.b64encode(auth_str.encode("utf-8")).decode("utf-8")
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {auth_base64}"
+    }
+    
+    order_id = f"TUGAS-BOT-{int(time.time())}-{random.randint(1000, 9999)}"
+    
+    payload = {
+        "transaction_details": {
+            "order_id": order_id,
+            "gross_amount": amount
+        },
+        "credit_card": {
+            "secure": True
+        }
+    }
+    
+    response = requests.post(url, json=payload, headers=headers, timeout=10)
+    if response.status_code == 201:
+        data = response.json()
+        return data["redirect_url"], order_id
+    else:
+        raise Exception(f"Midtrans API Error: {response.status_code} - {response.text}")
+
+
 def handle_bayar(pesan: str) -> str:
     """
     Menangani perintah: !bayar [nominal] atau !dana [nominal]
 
-    Mengembalikan QR Code DANA/QRIS beserta caption nominal pembayaran.
+    Mengembalikan QR Code beserta detail informasi untuk menyelesaikan pembayaran.
     """
     import re
+    import os
     
     # Ambil bagian nominal dari pesan (misal "!bayar 10000" -> 10000)
     parts = pesan.strip().split()
@@ -437,9 +489,41 @@ def handle_bayar(pesan: str) -> str:
     # Format nominal ke mata uang Rupiah untuk tampilan caption
     nominal_text = f"Rp {nominal:,.0f}".replace(",", ".") if nominal else "Sukarela"
     
-    # Cek jika ada konfigurasi QRIS statis dari Environment Variable
+    # --- PILIHAN 1: Midtrans Payment Gateway ---
+    midtrans_key = os.environ.get("MIDTRANS_SERVER_KEY")
+    if midtrans_key and nominal:
+        try:
+            redirect_url, order_id = create_midtrans_payment(nominal)
+            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={redirect_url}"
+            caption = (
+                f"💸 *INVOICE PEMBAYARAN ELEKTRONIK* 💸\n\n"
+                f"Sistem telah membuat invoice pembayaran baru:\n"
+                f"📝 *Order ID:* `{order_id}`\n"
+                f"💰 *Nominal:* *{nominal_text}*\n\n"
+                f"Silakan scan QR Code di atas atau selesaikan pembayaran lewat link berikut:\n"
+                f"🔗 {redirect_url}\n\n"
+                f"Mendukung pembayaran via QRIS, GoPay, ShopeePay, Bank Virtual Account (BCA, Mandiri, BNI, BRI), Credit Card, dll. 🙏"
+            )
+            return f"[IMAGE]{qr_url}|{caption}"
+        except Exception as e:
+            print(f"⚠️ Gagal membuat transaksi Midtrans: {e}", flush=True)
+
+    # --- PILIHAN 2: Link Pembayaran Kustom (Saweria / Sociabuzz / Trakteer) ---
+    custom_link = os.environ.get("PAYMENT_LINK")
+    if custom_link:
+        # Jika ada nominal, coba tambahkan info nominal ke link jika didukung (opsional)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={custom_link}"
+        caption = (
+            f"💸 *LINK PEMBAYARAN KUSTOM* 💸\n\n"
+            f"Silakan scan QR Code di atas atau kunjungi link berikut untuk melakukan pembayaran:\n"
+            f"🔗 {custom_link}\n\n"
+            f"💰 *Nominal:* *{nominal_text}*\n\n"
+            f"Terima kasih atas dukungannya! 🙏"
+        )
+        return f"[IMAGE]{qr_url}|{caption}"
+
+    # --- PILIHAN 3: Dynamic QRIS (jika STATIC_QRIS di-set) ---
     static_qris = os.environ.get("STATIC_QRIS")
-    
     if static_qris and nominal:
         try:
             dynamic_qris_str = make_qris_dynamic(static_qris, nominal)
@@ -452,10 +536,9 @@ def handle_bayar(pesan: str) -> str:
             )
             return f"[IMAGE]{qr_url}|{caption}"
         except Exception as err_qris:
-            # Fallback ke DANA jika gagal generate QRIS
             print(f"⚠️ Gagal generate QRIS dinamis: {err_qris}", flush=True)
 
-    # Default fallback: Link DANA
+    # --- PILIHAN 4: Fallback Default (DANA Personal) ---
     qr_data = "https://link.dana.id/qr/085841532954"
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={qr_data}"
     
