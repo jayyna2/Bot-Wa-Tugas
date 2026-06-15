@@ -42,7 +42,7 @@ python wa_bot.py
 | `!semua` | Lihat semua tugas (termasuk selesai) |
 | `!batal` | Batalkan proses tambah tugas |
 | `!help` | Tampilkan panduan |
-| `!keluar` | Keluar program (khusus mode terminal) |
+| `!keluar` | Matikan/hentikan jalannya program bot |
 
 ## 💬 Contoh Percakapan
 

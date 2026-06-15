@@ -373,7 +373,10 @@ def handle_help() -> str:
         "   Membatalkan proses tambah tugas yang sedang berjalan.\n\n"
         "6️⃣ *Bantuan*\n"
         "   `!help`\n"
-        "   Menampilkan pesan bantuan ini."
+        "   Menampilkan pesan bantuan ini.\n\n"
+        "7️⃣ *Matikan Bot (Keluar)*\n"
+        "   `!keluar`\n"
+        "   Menghentikan proses/mematikan jalannya bot."
     )
 
 
