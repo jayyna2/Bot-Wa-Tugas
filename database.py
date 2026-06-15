@@ -121,26 +121,22 @@ def get_tugas_belum_selesai() -> list:
 
 def selesaikan_tugas(tugas_id: int) -> bool:
     """
-    Mengubah status tugas menjadi 'Selesai' berdasarkan ID.
+    Menghapus tugas dari database berdasarkan ID karena sudah selesai.
 
     Parameters:
-        tugas_id (int): ID tugas yang ingin diselesaikan
+        tugas_id (int): ID tugas yang ingin diselesaikan/dihapus
 
     Returns:
         bool: True jika berhasil (ID ditemukan), False jika tidak
-
-    Catatan:
-        cursor.rowcount menyimpan jumlah baris yang ter-update.
-        Jika 0, berarti ID tidak ditemukan di database.
     """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE tugas SET status = ? WHERE id = ? AND status = ?",
-            ("Selesai", tugas_id, "Belum Selesai")
+            "DELETE FROM tugas WHERE id = ?",
+            (tugas_id,)
         )
         conn.commit()
-        return cursor.rowcount > 0  # True jika ada baris yang berubah
+        return cursor.rowcount > 0  # True jika ada baris yang terhapus
 
 
 def get_semua_tugas() -> list:

@@ -290,15 +290,14 @@ def handle_kelar(pesan: str) -> str:
 
     tugas_id = int(konten)
 
-    # Coba update di database
+    # Coba hapus di database karena sudah selesai
     berhasil = selesaikan_tugas(tugas_id)
 
     if berhasil:
-        return f"🎉 *Tugas ID {tugas_id} sudah ditandai SELESAI!* Good job! 💪"
+        return f"🎉 *Tugas ID {tugas_id} sudah ditandai SELESAI dan dihapus otomatis!* Good job! 💪"
     else:
         return (
-            f"❌ *Tugas dengan ID {tugas_id} tidak ditemukan*\n"
-            "atau sudah berstatus Selesai.\n\n"
+            f"❌ *Tugas dengan ID {tugas_id} tidak ditemukan*.\n\n"
             "Cek daftar tugas pending dengan `!list`"
         )
 
@@ -351,17 +350,39 @@ def handle_help() -> str:
         "   Menampilkan semua tugas yang belum selesai.\n\n"
         "3️⃣ *Tandai Tugas Selesai*\n"
         "   `!kelar [ID]`\n"
-        "   Contoh: `!kelar 3`\n\n"
+        "   Contoh: `!kelar 3` (tugas akan dihapus otomatis)\n\n"
         "4️⃣ *Lihat Semua Tugas*\n"
         "   `!semua`\n"
         "   Menampilkan semua tugas termasuk yang sudah selesai.\n\n"
         "5️⃣ *Batalkan Proses*\n"
         "   `!batal`\n"
         "   Membatalkan proses tambah tugas yang sedang berjalan.\n\n"
-        "6️⃣ *Bantuan*\n"
+        "6️⃣ *Metode Pembayaran*\n"
+        "   `!bayar` atau `!dana`\n"
+        "   Menampilkan QR Code DANA untuk pembayaran.\n\n"
+        "7️⃣ *Bantuan*\n"
         "   `!help`\n"
         "   Menampilkan pesan bantuan ini."
     )
+
+
+def handle_bayar() -> str:
+    """
+    Menangani perintah: !bayar atau !dana
+
+    Mengembalikan prefix [IMAGE] dengan URL QR Code DANA dan detail informasi pembayaran.
+    """
+    qr_data = "https://link.dana.id/qr/085841532954"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={qr_data}"
+    
+    caption = (
+        "💸 *METODE PEMBAYARAN DANA* 💸\n\n"
+        "Silakan scan QR Code DANA di atas melalui aplikasi e-wallet kamu, atau klik link di bawah ini:\n"
+        "🔗 https://link.dana.id/qr/085841532954\n\n"
+        "📞 *No. HP DANA:* `085841532954`\n\n"
+        "Setelah melakukan transfer, silakan konfirmasi ke admin. Terima kasih! 🙏"
+    )
+    return f"[IMAGE]{qr_url}|{caption}"
 
 
 # =========================================================
@@ -436,6 +457,9 @@ def proses_pesan(pesan: str, user_id: str = "terminal") -> str:
 
     elif pesan_lower == "!help":
         return handle_help()
+
+    elif pesan_lower == "!bayar" or pesan_lower == "!dana" or pesan_lower == "!qr":
+        return handle_bayar()
 
     else:
         # Perintah tidak dikenali

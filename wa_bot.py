@@ -172,23 +172,44 @@ def on_message(client: NewClient, message: MessageEv):
         balasan = proses_pesan(msg_text, user_id=user_id)
 
         if balasan:
-            try:
-                # Gunakan reply_message agar balasan muncul sebagai
-                # quoted reply (lebih jelas siapa yang dituju di grup)
-                result = client.reply_message(balasan, message)
-                print(f"🤖 Bot > {balasan[:80]}...", flush=True)
-                print(f"   📤 Send result: {result}", flush=True)
-            except Exception as send_err:
-                print(f"❌ GAGAL kirim reply_message: {send_err}", flush=True)
-                # Fallback: coba send_message biasa
+            if balasan.startswith("[IMAGE]"):
+                # Format: [IMAGE]url|caption
+                parts = balasan[7:].split("|", 1)
+                img_url = parts[0]
+                caption = parts[1] if len(parts) > 1 else ""
                 try:
-                    result2 = client.send_message(chat_jid, balasan)
-                    print(f"🤖 Bot (fallback) > {balasan[:80]}...", flush=True)
-                    print(f"   📤 Fallback result: {result2}", flush=True)
-                except Exception as send_err2:
-                    print(f"❌ GAGAL send_message juga: {send_err2}", flush=True)
-                    import traceback
-                    traceback.print_exc()
+                    import requests
+                    resp = requests.get(img_url, timeout=10)
+                    if resp.status_code == 200:
+                        result = client.send_image(chat_jid, resp.content, caption=caption, quoted=message)
+                        print(f"🤖 Bot > Sent DANA QR Image", flush=True)
+                        print(f"   📤 Send result: {result}", flush=True)
+                    else:
+                        client.reply_message(f"❌ Gagal mengambil QR Code: HTTP {resp.status_code}", message)
+                except Exception as send_err:
+                    print(f"❌ GAGAL kirim send_image: {send_err}", flush=True)
+                    try:
+                        client.reply_message(f"⚠️ Gagal mengirim gambar QR. Silakan transfer langsung ke DANA: 085841532954\n🔗 https://link.dana.id/qr/085841532954", message)
+                    except Exception as e_fb:
+                        print(f"❌ GAGAL fallback: {e_fb}", flush=True)
+            else:
+                try:
+                    # Gunakan reply_message agar balasan muncul sebagai
+                    # quoted reply (lebih jelas siapa yang dituju di grup)
+                    result = client.reply_message(balasan, message)
+                    print(f"🤖 Bot > {balasan[:80]}...", flush=True)
+                    print(f"   📤 Send result: {result}", flush=True)
+                except Exception as send_err:
+                    print(f"❌ GAGAL kirim reply_message: {send_err}", flush=True)
+                    # Fallback: coba send_message biasa
+                    try:
+                        result2 = client.send_message(chat_jid, balasan)
+                        print(f"🤖 Bot (fallback) > {balasan[:80]}...", flush=True)
+                        print(f"   📤 Fallback result: {result2}", flush=True)
+                    except Exception as send_err2:
+                        print(f"❌ GAGAL send_message juga: {send_err2}", flush=True)
+                        import traceback
+                        traceback.print_exc()
 
     except Exception as e:
         # Tangkap SEMUA error dan print ke terminal agar bisa di-debug
