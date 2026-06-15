@@ -182,7 +182,18 @@ def on_message(client: NewClient, message: MessageEv):
             return
 
         user_id = str(sender_jid)
-        msg_clean = msg_text.strip().lower()
+        is_group = message.Info.MessageSource.IsGroup
+
+        # --- LOG PESAN MASUK (Di top agar selalu tercatat di console) ---
+        sender_name = message.Info.Pushname or "Unknown"
+        label = "[GRUP]" if is_group else "[PERSONAL]"
+        print(f"📨 {label} {sender_name} > {msg_text}", flush=True)
+
+        # Normalisasi spasi (misalnya "! start" -> "!start", "!  stop" -> "!stop")
+        msg_text_norm = msg_text.strip()
+        if msg_text_norm.startswith("!"):
+            msg_text_norm = "!" + msg_text_norm[1:].lstrip()
+        msg_clean = msg_text_norm.lower()
 
         # --- HANDLER STATUS AKTIF/NONAKTIF ---
         global BOT_ACTIVE
@@ -237,14 +248,6 @@ def on_message(client: NewClient, message: MessageEv):
             in_session = user_id in sesi_tambah
             if not is_command and not in_session:
                 return
-
-        # Deteksi apakah pesan dari grup
-        is_group = message.Info.MessageSource.IsGroup
-
-        # --- LOG PESAN MASUK ---
-        sender_name = message.Info.Pushname or "Unknown"
-        label = "[GRUP]" if is_group else "[PERSONAL]"
-        print(f"📨 {label} {sender_name} > {msg_text}", flush=True)
 
         # --- PROSES PESAN DAN KIRIM BALASAN ---
         balasan = proses_pesan(msg_text, user_id=user_id, is_whatsapp=True)
