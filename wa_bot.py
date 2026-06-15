@@ -64,6 +64,7 @@ from bot import proses_pesan
 # File session SQLite untuk menyimpan login WhatsApp.
 # Scan QR hanya perlu dilakukan sekali, session disimpan di sini.
 data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+os.makedirs(data_dir, exist_ok=True)
 SESSION_DB = os.path.join(data_dir, "wa_session.sqlite3")
 
 # Set log level ke ERROR agar terminal bersih dari warning

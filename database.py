@@ -25,6 +25,7 @@ def get_db_path():
     dengan file script ini, bukan di folder kerja terminal.
     """
     base_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+    os.makedirs(base_dir, exist_ok=True)
     return os.path.join(base_dir, DB_NAME)
 
 
