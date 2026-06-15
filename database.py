@@ -10,6 +10,7 @@
 
 import sqlite3
 import os
+from contextlib import closing
 
 # =========================================================
 # KONFIGURASI DATABASE
@@ -23,19 +24,44 @@ def get_db_path():
     Mengembalikan path absolut ke file database.
     Ini memastikan database selalu dibuat di folder yang sama
     dengan file script ini, bukan di folder kerja terminal.
+    Melakukan pemeriksaan izin menulis (write permission) untuk mendeteksi
+    masalah pada lingkungan container sejak awal.
     """
     base_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-    os.makedirs(base_dir, exist_ok=True)
+    try:
+        os.makedirs(base_dir, exist_ok=True)
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ DATABASE ERROR: Gagal membuat folder data di: {base_dir}")
+        print(f"   Detail: {e}")
+        print("   Tips: Set variabel lingkungan DATA_DIR ke folder yang writable (misal: /tmp).")
+        print("=" * 60)
+        raise
+
+    # Uji izin menulis (write permission)
+    test_file = os.path.join(base_dir, ".write_test")
+    try:
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ DATABASE ERROR: Folder data tidak writable: {base_dir}")
+        print(f"   Detail: {e}")
+        print("   Tips: Set variabel lingkungan DATA_DIR ke folder yang writable (misal: /tmp).")
+        print("=" * 60)
+        raise PermissionError(f"Directory {base_dir} is not writable") from e
+
     return os.path.join(base_dir, DB_NAME)
+
 
 
 def get_connection():
     """
     Membuat dan mengembalikan koneksi ke database SQLite.
-    Menggunakan context manager (with statement) di pemanggil
-    untuk memastikan koneksi ditutup dengan benar.
+    Ditambahkan parameter timeout=30.0 untuk menghindari lock.
     """
-    return sqlite3.connect(get_db_path())
+    return sqlite3.connect(get_db_path(), timeout=30.0)
 
 
 # =========================================================
@@ -58,18 +84,21 @@ def init_db():
     │ status     │ TEXT     │ Default: 'Belum Selesai'     │
     └────────────┴──────────┴──────────────────────────────┘
     """
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tugas (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                matkul      TEXT    NOT NULL,
-                deskripsi   TEXT    NOT NULL,
-                deadline    TEXT    NOT NULL,
-                status      TEXT    NOT NULL DEFAULT 'Belum Selesai'
-            )
-        """)
-        conn.commit()
+    with closing(get_connection()) as conn:
+        with conn:
+            cursor = conn.cursor()
+            # Aktifkan WAL (Write-Ahead Logging) mode untuk mendukung konkurensi thread
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tugas (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    matkul      TEXT    NOT NULL,
+                    deskripsi   TEXT    NOT NULL,
+                    deadline    TEXT    NOT NULL,
+                    status      TEXT    NOT NULL DEFAULT 'Belum Selesai'
+                )
+            """)
+            conn.commit()
     print("[DB] ✅ Database dan tabel 'tugas' siap digunakan.")
 
 
@@ -93,14 +122,15 @@ def tambah_tugas(matkul: str, deskripsi: str, deadline: str) -> int:
         Menggunakan parameterized query (tanda ?) untuk
         mencegah SQL Injection — ini best practice keamanan.
     """
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO tugas (matkul, deskripsi, deadline) VALUES (?, ?, ?)",
-            (matkul.strip(), deskripsi.strip(), deadline.strip())
-        )
-        conn.commit()
-        return cursor.lastrowid  # Mengembalikan ID record baru
+    with closing(get_connection()) as conn:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO tugas (matkul, deskripsi, deadline) VALUES (?, ?, ?)",
+                (matkul.strip(), deskripsi.strip(), deadline.strip())
+            )
+            conn.commit()
+            return cursor.lastrowid  # Mengembalikan ID record baru
 
 
 def get_tugas_belum_selesai() -> list:
@@ -111,7 +141,7 @@ def get_tugas_belum_selesai() -> list:
         list: Daftar tuple berisi (id, matkul, deskripsi, deadline)
               Contoh: [(1, 'Kalkulus', 'Latihan Bab 5', '20 Juni 2026'), ...]
     """
-    with get_connection() as conn:
+    with closing(get_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT id, matkul, deskripsi, deadline FROM tugas WHERE status = ?",
@@ -130,14 +160,15 @@ def selesaikan_tugas(tugas_id: int) -> bool:
     Returns:
         bool: True jika berhasil (ID ditemukan), False jika tidak
     """
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM tugas WHERE id = ?",
-            (tugas_id,)
-        )
-        conn.commit()
-        return cursor.rowcount > 0  # True jika ada baris yang terhapus
+    with closing(get_connection()) as conn:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM tugas WHERE id = ?",
+                (tugas_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0  # True jika ada baris yang terhapus
 
 
 def get_semua_tugas() -> list:
@@ -148,7 +179,7 @@ def get_semua_tugas() -> list:
     Returns:
         list: Daftar tuple berisi (id, matkul, deskripsi, deadline, status)
     """
-    with get_connection() as conn:
+    with closing(get_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, matkul, deskripsi, deadline, status FROM tugas")
         return cursor.fetchall()

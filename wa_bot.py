@@ -97,16 +97,19 @@ def on_connected(_: NewClient, __: ConnectedEv):
     Event: Berhasil terkoneksi ke WhatsApp.
     Dipanggil setiap kali client berhasil login/reconnect.
     """
-    print()
-    print("=" * 55)
-    print("  ⚡ BOT BERHASIL TERKONEKSI KE WHATSAPP!")
-    print("=" * 55)
-    print()
-    print("  Bot sudah aktif dan siap menerima perintah.")
-    print("  Kirim !help ke nomor bot untuk panduan.")
-    print()
-    print("  Tekan Ctrl+C untuk menghentikan bot.")
-    print("-" * 55)
+    try:
+        print()
+        print("=" * 55)
+        print("  ⚡ BOT BERHASIL TERKONEKSI KE WHATSAPP!")
+        print("=" * 55)
+        print()
+        print("  Bot sudah aktif dan siap menerima perintah.")
+        print("  Kirim !help ke nomor bot untuk panduan.")
+        print()
+        print("  Tekan Ctrl+C untuk menghentikan bot.")
+        print("-" * 55)
+    except Exception as e:
+        print(f"❌ Error in on_connected: {e}", flush=True)
 
 
 @client.event(PairStatusEv)
@@ -115,7 +118,13 @@ def on_pair_status(_: NewClient, pair: PairStatusEv):
     Event: Status pairing (scan QR Code).
     Memberikan feedback saat proses scan QR selesai.
     """
-    print(f"  📱 Pairing status: {pair.ID}")
+    try:
+        if pair and hasattr(pair, "ID"):
+            print(f"  📱 Pairing status: {pair.ID}", flush=True)
+        else:
+            print(f"  📱 Pairing status update received", flush=True)
+    except Exception as e:
+        print(f"❌ Error in on_pair_status: {e}", flush=True)
 
 
 @client.event(MessageEv)
@@ -124,6 +133,22 @@ def on_message(client: NewClient, message: MessageEv):
     Event: Pesan masuk diterima.
     """
     try:
+        # --- VALIDASI OBJEK PESAN ---
+        if not message:
+            return
+
+        # Pengecekan apakah Metadata/Info tersedia
+        if not hasattr(message, "Info") or not message.Info:
+            return
+
+        # Pengecekan apakah Source/Pengirim tersedia
+        if not hasattr(message.Info, "MessageSource") or not message.Info.MessageSource:
+            return
+
+        # Pengecekan apakah isi pesan (Message) tersedia
+        if not hasattr(message, "Message") or not message.Message:
+            return
+
         # --- SKIP PESAN LAMA (HISTORY SYNC) ---
         # Saat bot connect, WhatsApp mengirim ulang pesan-pesan lama.
         # Kita hanya mau proses pesan yang masuk SETELAH bot start.
@@ -135,11 +160,11 @@ def on_message(client: NewClient, message: MessageEv):
         msg_text = ""
 
         # Tipe 1: Pesan teks biasa (conversation)
-        if message.Message.conversation:
+        if hasattr(message.Message, "conversation") and message.Message.conversation:
             msg_text = message.Message.conversation
 
         # Tipe 2: Pesan reply/kutipan (extendedTextMessage)
-        elif message.Message.extendedTextMessage and message.Message.extendedTextMessage.text:
+        elif hasattr(message.Message, "extendedTextMessage") and message.Message.extendedTextMessage and hasattr(message.Message.extendedTextMessage, "text") and message.Message.extendedTextMessage.text:
             msg_text = message.Message.extendedTextMessage.text
 
         # Abaikan pesan kosong atau pesan non-teks (gambar, stiker, dll.)
@@ -149,6 +174,9 @@ def on_message(client: NewClient, message: MessageEv):
         # --- AMBIL INFORMASI PENGIRIM ---
         chat_jid = message.Info.MessageSource.Chat
         sender_jid = message.Info.MessageSource.Sender
+        if not sender_jid or not chat_jid:
+            return
+
         user_id = str(sender_jid)
 
         # Cek apakah pesan dari diri sendiri
@@ -199,7 +227,6 @@ def on_message(client: NewClient, message: MessageEv):
         sys.stdout.flush()
 
 
-
 # =========================================================
 # MAIN — JALANKAN BOT
 # =========================================================
@@ -228,19 +255,30 @@ if __name__ == "__main__":
     print()
     print("-" * 55)
 
-    # Mulai koneksi WhatsApp
-    # Fungsi connect() akan:
-    # 1. Menampilkan QR Code di terminal (jika belum login)
-    # 2. Menunggu user scan QR
-    # 3. Menyimpan session ke wa_session.sqlite3
-    # 4. Mulai mendengarkan pesan masuk (blocking)
-    try:
-        client.connect()
-    except KeyboardInterrupt:
-        print("\n\n👋 Bot dihentikan. Sampai jumpa!")
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        print("\nTips:")
-        print("  1. Pastikan koneksi internet stabil")
-        print("  2. Coba hapus file wa_session.sqlite3 dan scan ulang")
-        print("  3. Pastikan neonize versi terbaru: pip install --upgrade neonize")
+    import time
+    retry_delay = 5  # detik
+
+    # Mulai koneksi WhatsApp dengan loop auto-reconnect
+    while True:
+        try:
+            print("  🔌 Menghubungkan ke WhatsApp...")
+            client.connect()
+            # Jika connect() selesai tanpa error (misal disconnect biasa), kita coba hubungkan ulang
+            print("  ⚠️ Koneksi terputus. Mencoba menghubungkan kembali dalam 5 detik...")
+            time.sleep(retry_delay)
+        except KeyboardInterrupt:
+            print("\n\n👋 Bot dihentikan oleh pengguna (Ctrl+C). Sampai jumpa!")
+            break
+        except Exception as e:
+            print(f"\n❌ Terjadi kesalahan koneksi: {e}")
+            print(f"  Mencoba menyambung ulang dalam {retry_delay} detik...")
+            print("Tips:")
+            print("  1. Pastikan koneksi internet aktif")
+            print("  2. Jika error persisten, hapus file wa_session.sqlite3 dan scan ulang")
+            print("  3. Pastikan neonize versi terbaru: pip install --upgrade neonize")
+            
+            try:
+                time.sleep(retry_delay)
+            except KeyboardInterrupt:
+                print("\n\n👋 Bot dihentikan oleh pengguna (Ctrl+C). Sampai jumpa!")
+                break
